@@ -1,7 +1,14 @@
 ai_goals:
-- Increase net worth.
-- Develop and manage multiple businesses autonomously.
-- Play to your strengths as a Large Language Model.
-ai_name: Entrepreneur-GPT
-ai_role: an AI designed to autonomously develop and run businesses with the sole goal
-  of increasing your net worth.
+- write working python code to convert a markdown file to pdf
+#  - Research vector databases
+ai_name: CodeGPT
+ai_role: create a script to convert .md files to .pdf files
+#ai_goals:
+#- Research human memory systems
+#- brainstorm ways to implement in code
+#- implement code
+#- test code
+#- make sure the code works with agents
+#ai_name: MemoryMan
+#ai_role: An AI dedicated to implementing a human-like memory system in python code
+#  that LLMs such as GPT-4 could use.

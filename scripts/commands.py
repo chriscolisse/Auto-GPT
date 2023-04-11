@@ -12,7 +12,7 @@ from json_parser import fix_and_parse_json
 from duckduckgo_search import ddg
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-
+from get_file_contents import get_cwd_file_contents
 cfg = Config()
 
 
@@ -81,7 +81,7 @@ def execute_command(command_name, arguments):
             return get_hyperlinks(arguments["url"])
         elif command_name == "read_file":
             return read_file(arguments["file"])
-        elif command_name == "write_to_file":
+        elif command_name == "write_to_file" or command_name == "write_python_file":
             return write_to_file(arguments["file"], arguments["text"])
         elif command_name == "append_to_file":
             return append_to_file(arguments["file"], arguments["text"])
@@ -94,7 +94,7 @@ def execute_command(command_name, arguments):
         # TODO: Change these to take in a file rather than pasted code, if
         # non-file is given, return instructions "Input should be a python
         # filepath, write your code to file and try again"
-        elif command_name == "evaluate_code":
+        elif command_name == "review_code":
             return ai.evaluate_code(arguments["code"])
         elif command_name == "improve_code":
             return ai.improve_code(arguments["suggestions"], arguments["code"])
@@ -104,6 +104,16 @@ def execute_command(command_name, arguments):
             return execute_python_file(arguments["file"])
         elif command_name == "task_complete":
             shutdown()
+        elif command_name == "None":
+            return ""
+        elif command_name == "./tools/get_all_files_content":
+            if "directory" in arguments:
+                path = arguments.get("directory")
+            elif "path" in arguments:
+                path = arguments.get("path")
+            else:
+                path = None
+            return get_cwd_file_contents(path=path)
         else:
             return f"Unknown command {command_name}"
     # All errors, return "Error: + error message"

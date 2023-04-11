@@ -1,6 +1,8 @@
 import os
 import openai
 from dotenv import load_dotenv
+import json
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -33,7 +35,7 @@ class Config(metaclass=Singleton):
         self.smart_llm_model = os.getenv("SMART_LLM_MODEL", "gpt-4")
         self.fast_token_limit = int(os.getenv("FAST_TOKEN_LIMIT", 4000))
         self.smart_token_limit = int(os.getenv("SMART_TOKEN_LIMIT", 8000))
-        
+        self.temperature = float(os.getenv("AI_TEMPERATURE", 0))
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         self.use_azure = False
         self.use_azure = os.getenv("USE_AZURE") == 'True'
@@ -56,10 +58,10 @@ class Config(metaclass=Singleton):
         # User agent headers to use when browsing web
         # Some websites might just completely deny request with an error code if no user agent was found.
         self.user_agent_header = {"User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36"}
-
         # Initialize the OpenAI API client
         openai.api_key = self.openai_api_key
-
+        with open("./tool_list.json") as f:
+            self.tool_list = json.loads(f.read())
     def set_continuous_mode(self, value: bool):
         self.continuous_mode = value
 

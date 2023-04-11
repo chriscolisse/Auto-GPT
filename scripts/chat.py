@@ -3,11 +3,9 @@ import openai
 from dotenv import load_dotenv
 from config import Config
 import token_counter
+import agents
 
 cfg = Config()
-
-from llm_utils import create_chat_completion
-
 
 def create_chat_message(role, content):
     """
@@ -44,7 +42,7 @@ def chat_with_ai(
         full_message_history,
         permanent_memory,
         token_limit,
-        debug=False):
+        debug=False):#change to True for start debug
     while True:
         try:
             """
@@ -66,7 +64,7 @@ def chat_with_ai(
                 print(f"Token limit: {token_limit}")
             send_token_limit = token_limit - 1000
 
-            relevant_memory = permanent_memory.get_relevant(str(full_message_history[-5:]), 10)
+            relevant_memory = permanent_memory.get_relevant(str(full_message_history[-5:]), 10)# target for injecting my own relevant memory...
 
             if debug:
                 print('Memory Stats: ', permanent_memory.get_stats())
@@ -122,11 +120,8 @@ def chat_with_ai(
                 print("----------- END OF CONTEXT ----------------")
 
             # TODO: use a model defined elsewhere, so that model can contain temperature and other settings we care about
-            assistant_reply = create_chat_completion(
-                model=model,
-                messages=current_context,
-                max_tokens=tokens_remaining,
-            )
+            agent = agents.ManagerAgent(messages=current_context, max_tokens=tokens_remaining, temperature=cfg.temperature, main_agent=True)
+            assistant_reply = agent.start()
 
             # Update full message history
             full_message_history.append(

@@ -123,24 +123,26 @@ def load_variables(config_file="config.yaml"):
         if ai_name == "":
             ai_name = "Entrepreneur-GPT"
 
-    if not ai_role:        
+    if not ai_role:
         ai_role = input(f"{ai_name} is: ")
         if ai_role == "":
             ai_role = "an AI designed to autonomously develop and run businesses with the sole goal of increasing your net worth."
 
     if not ai_goals:
         print("Enter up to 5 goals for your AI: ")
-        print("For example: \nIncrease net worth, Grow Twitter Account, Develop and manage multiple businesses autonomously'")
+        print(
+            "For example: \nIncrease net worth, Grow Twitter Account, Develop and manage multiple businesses autonomously'")
         print("Enter nothing to load defaults, enter nothing when finished.")
         ai_goals = []
         for i in range(5):
-            ai_goal = input(f"Goal {i+1}: ")
+            ai_goal = input(f"Goal {i + 1}: ")
             if ai_goal == "":
                 break
             ai_goals.append(ai_goal)
         if len(ai_goals) == 0:
-            ai_goals = ["Increase net worth", "Grow Twitter Account", "Develop and manage multiple businesses autonomously"]
-         
+            ai_goals = ["Increase net worth", "Grow Twitter Account",
+                        "Develop and manage multiple businesses autonomously"]
+
     # Save variables to yaml file
     config = {"ai_name": ai_name, "ai_role": ai_role, "ai_goals": ai_goals}
     with open(config_file, "w") as file:
@@ -152,13 +154,13 @@ def load_variables(config_file="config.yaml"):
     # Construct full prompt
     full_prompt = f"You are {ai_name}, {ai_role}\n{prompt_start}\n\nGOALS:\n\n"
     for i, goal in enumerate(ai_goals):
-        full_prompt += f"{i+1}. {goal}\n"
+        full_prompt += f"{i + 1}. {goal}\n"
 
     full_prompt += f"\n\n{prompt}"
     return full_prompt
 
 
-def construct_prompt():
+def construct_prompt(tools):
     config = AIConfig.load()
     if config.ai_name:
         print_to_console(
@@ -174,15 +176,15 @@ Continue (y/n): """)
         if should_continue.lower() == "n":
             config = AIConfig()
 
-    if not config.ai_name:         
+    if not config.ai_name:
         config = prompt_user()
         config.save()
 
     # Get rid of this global:
     global ai_name
     ai_name = config.ai_name
-    
-    full_prompt = config.construct_full_prompt()
+
+    full_prompt = config.construct_full_prompt(tools=tools)
     return full_prompt
 
 
@@ -227,7 +229,7 @@ def prompt_user():
     print("Enter nothing to load defaults, enter nothing when finished.", flush=True)
     ai_goals = []
     for i in range(5):
-        ai_goal = input(f"{Fore.LIGHTBLUE_EX}Goal{Style.RESET_ALL} {i+1}: ")
+        ai_goal = input(f"{Fore.LIGHTBLUE_EX}Goal{Style.RESET_ALL} {i + 1}: ")
         if ai_goal == "":
             break
         ai_goals.append(ai_goal)
@@ -238,11 +240,12 @@ def prompt_user():
     config = AIConfig(ai_name, ai_role, ai_goals)
     return config
 
+
 def parse_arguments():
     global cfg
     cfg.set_continuous_mode(False)
     cfg.set_speak_mode(False)
-    
+
     parser = argparse.ArgumentParser(description='Process arguments.')
     parser.add_argument('--continuous', action='store_true', help='Enable Continuous Mode')
     parser.add_argument('--speak', action='store_true', help='Enable Speak Mode')
@@ -268,11 +271,19 @@ def parse_arguments():
 
 
 # TODO: fill in llm values here
+try:
+    with open('available_agent_tools.json') as f:
+        tools = json.loads(f.read())  # Should transfer this directly to an Agent object.
+except:
+    tools = {}
+    print("\n\n**Error loading tools. No tools will be available to the Agent.**\n\n")
+    print("\n\n**Error loading tools. No tools will be available to the Agent.**\n\n")
 
 cfg = Config()
 parse_arguments()
 ai_name = ""
-prompt = construct_prompt()
+prompt = construct_prompt(
+    tools=tools)  # all of this could be in an Agent class. It would make it easier to have multiple smart agents at once, with different purposes and different sets of tools.
 # print(prompt)
 # Initialize variables
 full_message_history = []
@@ -288,17 +299,23 @@ memory.clear()
 
 print('Using memory of type: ' + memory.__class__.__name__)
 
+
+# CHRIS added this function:
+def get_ai_chat_response(prompt, user_input, full_message_history, memory):
+    with Spinner("Thinking... "):
+        assistant_reply = chat.chat_with_ai(
+            prompt=prompt,
+            user_input=user_input,
+            full_message_history=full_message_history,
+            permanent_memory=memory,
+            token_limit=cfg.fast_token_limit)  # TODO: This hardcodes the model to use GPT3.5. Make this an argument
+    return assistant_reply
+
+
 # Interaction Loop
 while True:
     # Send message to AI, get response
-    with Spinner("Thinking... "):
-        assistant_reply = chat.chat_with_ai(
-            prompt,
-            user_input,
-            full_message_history,
-            memory,
-            cfg.fast_token_limit) # TODO: This hardcodes the model to use GPT3.5. Make this an argument
-
+    assistant_reply = get_ai_chat_response(prompt, user_input, full_message_history, memory)
     # Print Assistant thoughts
     print_assistant_thoughts(assistant_reply)
 
@@ -337,15 +354,14 @@ while True:
                 user_input = "EXIT"
                 break
             else:
-                user_input = console_input
                 command_name = "human_feedback"
                 break
 
         if user_input == "GENERATE NEXT COMMAND JSON":
             print_to_console(
-            "-=-=-=-=-=-=-= COMMAND AUTHORISED BY USER -=-=-=-=-=-=-=",
-            Fore.MAGENTA,
-            "")
+                "-=-=-=-=-=-=-= COMMAND AUTHORISED BY USER -=-=-=-=-=-=-=",
+                Fore.MAGENTA,
+                "")
         elif user_input == "EXIT":
             print("Exiting...", flush=True)
             break
@@ -358,7 +374,7 @@ while True:
 
     # Execute command
     if command_name.lower() == "error":
-        result = f"Command {command_name} threw the following error: " + arguments
+        result = f"Command {command_name} threw the following error: " + str(arguments)
     elif command_name == "human_feedback":
         result = f"Human feedback: {user_input}"
     else:
@@ -382,4 +398,3 @@ while True:
             chat.create_chat_message(
                 "system", "Unable to execute command"))
         print_to_console("SYSTEM: ", Fore.YELLOW, "Unable to execute command")
-
