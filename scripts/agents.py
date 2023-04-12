@@ -1,3 +1,5 @@
+import os
+
 from llm_utils import create_chat_completion
 from config import Config
 from ai_config import AIConfig
@@ -5,26 +7,37 @@ import chat
 import json
 import token_counter
 from pathlib import Path
-from dataclasses import dataclass
 
 cfg = Config()
+
+path = Path(os.getcwd())
 
 
 class BaseAgent:
     def __init__(self, model, messages, temperature, max_tokens):
         self.messages = messages
         self.temperature = temperature
-        self.max_tokens = max_tokens
+        self._max_tokens = max_tokens
         self.model = model
 
+    @property
+    def max_tokens(self):
+        return self._max_tokens
+
+    @max_tokens.setter
+    def max_tokens(self, val):
+        msg_tokens = token_counter.count_message_tokens(self.messages)
+        self._max_tokens = val - msg_tokens
+
     def execute(self):
+        print('\n\n---\n\n', self.max_tokens, '\n\n---\n\n')
         output = create_chat_completion(
             model=self.model,
             messages=self.messages,
             max_tokens=self.max_tokens,
             temperature=self.temperature
         )
-        return
+        return output
 
     @staticmethod
     def construct_tool_prompt(tools, prompt_start=None):
@@ -74,7 +87,7 @@ class BaseAgent:
         full_prompt += file_prompt
         return full_prompt
 
-    @dataclass
+    # @property
     def load_prompt(self):
         try:
             # get directory of this file:
@@ -92,11 +105,10 @@ class BaseAgent:
 
 
 class ValidatorAgent(BaseAgent):
-    def __init__(self, temperature=0, max_tokens=cfg.fast_token_limit, model="gpt-3.5-turbo"):
+    def __init__(self, temperature=0, max_tokens=cfg.fast_token_limit, model=cfg.fast_llm_model):
         self.prompt = None  # need to change so prompt here is validator prompt
         self.model = model
         self.terminate = False
-        self.max_tokens = max_tokens
         self.messages = []
         self.ai_config = AIConfig()
         self.temperature = temperature
@@ -104,11 +116,11 @@ class ValidatorAgent(BaseAgent):
 
         self.max_tokens -= int(tokens + self.max_tokens / 2)
         self.load_base_prompt()
+        self.max_tokens = max_tokens
 
         super().__init__(model=self.model, messages=self.messages, temperature=self.temperature,
                          max_tokens=self.max_tokens)
-        # with open('prontpeioe.txt', 'w') as f:
-        #     f.write(self.prompt)
+
 
     def load_base_prompt(self, prompt_file="data/validator_prompt.txt"):
         import os
@@ -142,35 +154,34 @@ class ValidatorAgent(BaseAgent):
 # all the prompt info should be handled in these agent classes, and not hard coded into chat.py, AIconfig.py etc..
 # those files should instead become parsers, and message management should happen directly in the agent classes.
 class ManagerAgent(BaseAgent):
-    def __init__(self, messages, temperature, max_tokens, model="gpt-4", main_agent=False):
-        super().__init__(model, messages, temperature, max_tokens)
-
+    def __init__(self, messages, temperature, max_tokens=cfg.fast_token_limit, model=cfg.fast_llm_model,
+                 main_agent=False):
         self.messages = messages
         self.temperature = 0.5  # temperature
-        self.max_tokens = max_tokens
         self.validate_output = False
         self.model = model
         self.ai_config = AIConfig()
         self.main_agent = main_agent
 
         try:
-            with open("available_agent_tools.json", "r") as f:
+            main_path = path
+            if "main.py" not in os.listdir(path):
+                if "scripts" in os.listdir(path):
+                    main_path = f"{main_path}/scripts/"
+
+            with open(f"{main_path}/available_agent_tools.json", "r") as f:
                 self.tools = json.loads(f.read())
         except Exception as e:
             raise (Exception(e))
             # self.tools = {}
 
-        with open("./data/prompt.txt", "r") as f:
+        with open(f"{main_path}/data/prompt.txt", "r") as f:
             raw_base_prompt = f.read()
 
         self.base_prompt = self.load_base_prompt(base_prompt=raw_base_prompt)
-
-        # print(f'\n\n---------------\n\n{self.base_prompt}\n\n---------------\n\n')
-        # with open("AGENT PROMPT.txt", "w") as f:
-        #     f.write(self.base_prompt)
-
-        self.messages.pop(0)
         self.messages.append(chat.create_chat_message(role="system", content=self.base_prompt))
+        self.max_tokens = cfg.fast_token_limit
+        super().__init__(self.model, self.messages, self.temperature, self.max_tokens)
 
     def load_base_prompt(self, base_prompt: bool | str = False, prompt_config="../ai_settings.yaml"):
         prompt_start = """Your decisions must always be made independently without seeking user assistance. Use your reasoning capabilities to break tasks down into smaller parts and achieve your goals."""
@@ -199,7 +210,7 @@ class ManagerAgent(BaseAgent):
 
         file_prompt = base_prompt
         file_prompt = file_prompt.split("AVAILABLE COMMANDS:")
-        tool_prompt = self.ai_config.construct_tool_prompt(self.tools)
+        tool_prompt = self.construct_tool_prompt(self.tools)
         file_prompt.insert(1, tool_prompt)
         file_prompt = " ".join(file_prompt)
 

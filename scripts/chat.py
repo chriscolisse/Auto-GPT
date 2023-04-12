@@ -7,6 +7,7 @@ import agents
 
 cfg = Config()
 
+
 def create_chat_message(role, content):
     """
     Create a chat message with the given role and content.
@@ -21,11 +22,13 @@ def create_chat_message(role, content):
     return {"role": role, "content": content}
 
 
-def generate_context(prompt, relevant_memory, full_message_history, model):
+def generate_context(relevant_memory, full_message_history, model):
     current_context = [
+
         create_chat_message(
-            "system", prompt), create_chat_message(
-            "system", f"Permanent memory: {relevant_memory}")]
+            "system", f"today= {time.strftime('%c')}"),
+        create_chat_message(
+            "system", f"Your memories:\n{relevant_memory}\n\n")]
 
     # Add messages from the full message history until we reach the token limit
     next_message_to_add_index = len(full_message_history) - 1
@@ -37,12 +40,11 @@ def generate_context(prompt, relevant_memory, full_message_history, model):
 
 # TODO: Change debug from hardcode to argument
 def chat_with_ai(
-        prompt,
         user_input,
         full_message_history,
         permanent_memory,
         token_limit,
-        debug=False):#change to True for start debug
+        debug=False):  # change to True for start debug
     while True:
         try:
             """
@@ -58,31 +60,35 @@ def chat_with_ai(
             Returns:
             str: The AI's response.
             """
-            model = cfg.fast_llm_model # TODO: Change model from hardcode to argument
+            model = cfg.fast_llm_model  # TODO: Change model from hardcode to argument
             # Reserve 1000 tokens for the response
             if debug:
                 print(f"Token limit: {token_limit}")
+
             send_token_limit = token_limit - 1000
 
-            relevant_memory = permanent_memory.get_relevant(str(full_message_history[-5:]), 10)# target for injecting my own relevant memory...
+            relevant_memory = permanent_memory.get_relevant(str(full_message_history[-5:]),
+                                                            10)  # target for injecting my own relevant memory...
 
             if debug:
                 print('Memory Stats: ', permanent_memory.get_stats())
 
-            next_message_to_add_index, current_tokens_used, insertion_index, current_context = generate_context(
-                prompt, relevant_memory, full_message_history, model)
+            next_message_to_add_index, current_tokens_used, insertion_index, current_context = generate_context(relevant_memory, full_message_history, model)
 
             while current_tokens_used > 2500:
                 # remove memories until we are under 2500 tokens
                 relevant_memory = relevant_memory[1:]
-                next_message_to_add_index, current_tokens_used, insertion_index, current_context = generate_context(
-                    prompt, relevant_memory, full_message_history, model)
+                next_message_to_add_index, current_tokens_used, insertion_index, current_context = generate_context(relevant_memory, full_message_history, model)
 
-            current_tokens_used += token_counter.count_message_tokens([create_chat_message("user", user_input)], model) # Account for user input (appended later)
+            current_tokens_used += token_counter.count_message_tokens([create_chat_message("user", user_input)],
+                                                                      model)  # Account for user input (appended later)
 
             while next_message_to_add_index >= 0:
                 # print (f"CURRENT TOKENS USED: {current_tokens_used}")
-                message_to_add = full_message_history[next_message_to_add_index]
+                print(full_message_history[next_message_to_add_index] is None, full_message_history[next_message_to_add_index])
+                message_to_add = full_message_history[next_message_to_add_index] if full_message_history[next_message_to_add_index] is not None else ""
+
+                print(message_to_add)
 
                 tokens_to_add = token_counter.count_message_tokens([message_to_add], model)
                 if current_tokens_used + tokens_to_add > send_token_limit:
@@ -93,7 +99,7 @@ def chat_with_ai(
 
                 # Count the currently used tokens
                 current_tokens_used += tokens_to_add
-                
+
                 # Move to the next most recent message in the full message history
                 next_message_to_add_index -= 1
 
@@ -102,25 +108,27 @@ def chat_with_ai(
 
             # Calculate remaining tokens
             tokens_remaining = token_limit - current_tokens_used
-            # assert tokens_remaining >= 0, "Tokens remaining is negative. This should never happen, please submit a bug report at https://www.github.com/Torantulino/Auto-GPT"
+            # assert tokens_remaining >= 0, "Tokens remaining is negative. This should never happen, please submit a
+            # bug report at https://www.github.com/Torantulino/Auto-GPT"
 
             # Debug print the current context
-            if debug:
+            if cfg.debug_mode:
                 print(f"Token limit: {token_limit}")
                 print(f"Send Token Count: {current_tokens_used}")
                 print(f"Tokens remaining for response: {tokens_remaining}")
                 print("------------ CONTEXT SENT TO AI ---------------")
                 for message in current_context:
-                    # Skip printing the prompt
-                    if message["role"] == "system" and message["content"] == prompt:
-                        continue
+                    # # Skip printing the prompt
+                    # if message["role"] == "system" and message["content"] == prompt:
+                    #     continue
                     print(
                         f"{message['role'].capitalize()}: {message['content']}")
                     print()
                 print("----------- END OF CONTEXT ----------------")
 
             # TODO: use a model defined elsewhere, so that model can contain temperature and other settings we care about
-            agent = agents.ManagerAgent(messages=current_context, max_tokens=tokens_remaining, temperature=cfg.temperature, main_agent=True)
+            agent = agents.ManagerAgent(messages=current_context, max_tokens=tokens_remaining,
+                                        temperature=cfg.temperature, main_agent=True)
             assistant_reply = agent.start()
 
             # Update full message history
@@ -130,7 +138,6 @@ def chat_with_ai(
             full_message_history.append(
                 create_chat_message(
                     "assistant", assistant_reply))
-
             return assistant_reply
         except openai.error.RateLimitError:
             # TODO: WHen we switch to langchain, this is built in
